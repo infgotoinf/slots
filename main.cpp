@@ -1,15 +1,20 @@
 #include <iostream>
 #include <random>
+#include "json.hpp" // from nlohman btw
+using json = nlohmann::json;
 
-struct Params
+using namespace nlohmann::literals;
+
+class Params
 {
+public:
     // Each slot element/thing (idk, how to call it) has it's money_modyfier
-    float* elem_money_modyfier;
+    std::vector<float> elem_money_modyfier;
     int number_of_elem;
     // There are always at least 3 collumns
     // Modyfier starts from the 4th collumn (modyfier of the 3rd collumn is always 1)
-    // and if there's more values, when adds more collumns. Can be nullptr if noc == 3
-    float* column_money_modyfier;
+    // and if there's more values, when adds more collumns. Can be empty
+    std::vector<float> column_money_modyfier;
     int number_of_collumns;
 
     int number_of_rows;
@@ -17,12 +22,12 @@ struct Params
     int luck_value;
     int bonus_chance;
     int freespins_chance;
-
-    // good thing https://isocpp.github.io/CppCoreGuidelines/CppCoreGuidelines#rc-zero
-    Params (float* emm, const int noe, float* cmm, const int noc, const int nor
-          , const int lv, const int bc,const int fc)
-                : elem_money_modyfier(emm), number_of_elem(noe)
-                , column_money_modyfier(cmm), number_of_collumns(noc), number_of_rows(nor)
+    
+    // good thing for reference https://isocpp.github.io/CppCoreGuidelines/CppCoreGuidelines#rc-zero
+    Params (const std::vector<float>& emm, const std::vector<float>& cmm, const int nor
+          , const int lv, const int bc, const int fc)
+                : elem_money_modyfier(emm), number_of_elem(emm.size())
+                , column_money_modyfier(cmm), number_of_collumns(cmm.size() + 3), number_of_rows(nor)
                 , luck_value(lv), bonus_chance(bc), freespins_chance(fc) {}
 
     bool isBetween0and100(int num)
@@ -32,46 +37,83 @@ struct Params
 
     bool verify()
     {
-        // We believe what number_of_elem and number_of_collumns are correct
-        // (cause we can't check if it's true)
         if (isBetween0and100(luck_value)
           & isBetween0and100(bonus_chance)
           & isBetween0and100(freespins_chance)
           & number_of_elem > 2
-          & number_of_collumns > 2
           & number_of_rows > 0)
+        {
+            std::cout << "Number parameters are correct\n";
+
+            for (float modyfier : elem_money_modyfier)
+            {
+                if (modyfier < 0)
+                {
+                    std::cout << "Negative modyfier value!\n";
+                    return false;
+                }
+            }
+            std::cout << "Modyfiers values are correct\n";
+
             return true;
+        }
+
+        std::cout << "Number parameters are wrong!";
         return false;
     }
+
 };
 
-std::random_device dev;
-std::mt19937 rnd(dev());
+
 
 int countMoney(int bet, float elem_money_modyfier, float column_money_modyfier)
 {
     return float(bet) * elem_money_modyfier * column_money_modyfier;
 }
 
-// TODO: figure out with luck, freespeens and bonus game
-int spinSlot(int bet, Params params)
+Params parseParamsFromJson(std::string str_params)
 {
+    json parsed_params = json::parse(str_params);
+
+    Params params(parsed_params["elem money modyfier"].get<std::vector<float>>()
+                , parsed_params["column money modyfier"].get<std::vector<float>>()
+                , parsed_params["number of rows"].get<int>(), parsed_params["luck value"].get<int>()
+                , parsed_params["bonus chance"].get<int>(), parsed_params["freespins chance"].get<int>());
+
+    return params;
+}
+
+
+
+std::random_device dev;
+std::mt19937 rnd(dev());
+
+// TODO: figure out with luck, freespeens and bonus game
+extern "C" int spinSlot(int bet, std::string str_params)
+{
+    Params params {parseParamsFromJson(str_params)};
+
+    if (params.verify() == false)
+    {
+        std::cout << "Input parameter verification error!" << std::endl;
+        return 0;
+    }
+
+    //std::vector<std::vector<int>> spin_result;
+
     std::uniform_int_distribution<int> dist(0, params.number_of_elem - 1);
     int zero_char = 65;
-
-    int** spin_result = new int*[params.number_of_rows];
-
     int money_earn = -bet;
     for (int i = 0; i < params.number_of_rows; ++i)
     {
-        spin_result[i] = new int[params.number_of_collumns];
+        std::vector<int> row;
         int match_count = 1;
         int elem_idx;
         bool skip = false;
         for (int j = 0; j < params.number_of_collumns; ++j)
         {
             int cur_elem_idx = dist(rnd);
-            spin_result[i][j] = cur_elem_idx;
+            //row.push_back(cur_elem_idx);
 
             std::cout << char(zero_char + cur_elem_idx) << ' ';
 
@@ -97,33 +139,9 @@ int spinSlot(int bet, Params params)
                 skip = true;
             }
         }
+        //spin_result.push_back(row);
         std::cout << '\n';
     }
     std::cout << std::endl;
     return money_earn;
-}
-
-int main()
-{
-    int number_of_elements = 4;
-    float* elem_money_modyfier = new float[number_of_elements]{1.5, 3, 5, 10};
-    int number_of_collumns = 5;
-    float* column_money_modyfier = new float[number_of_collumns]{2, 5};
-
-    int number_of_rows = 3;
-    int luck_value = 50;
-    int bonus_chance = 2;
-    int freespins_chance = 5;
-    struct Params params(elem_money_modyfier, number_of_elements
-                       , column_money_modyfier, number_of_collumns, number_of_rows
-                       , luck_value, bonus_chance, freespins_chance);
-
-    while (true)
-    {
-        int win = spinSlot(100, params);
-        std::cout << "you won: " << win << '\n';
-        std::cin.get();
-    }
-
-    return 0;
 }
