@@ -1,5 +1,6 @@
 #include <iostream>
 #include <random>
+#include "ret_struct.hpp"
 #include "json.hpp" // from nlohman btw
 using json = nlohmann::json;
 
@@ -11,11 +12,11 @@ public:
     // Each slot element/thing (idk, how to call it) has it's money_modyfier
     std::vector<float> elem_money_modyfier;
     int number_of_elem;
-    // There are always at least 3 collumns
-    // Modyfier starts from the 4th collumn (modyfier of the 3rd collumn is always 1)
-    // and if there's more values, when adds more collumns. Can be empty
+    // There are always at least 3 columns
+    // Modyfier starts from the 4th column (modyfier of the 3rd column is always 1)
+    // and if there's more values, when adds more columns. Can be empty
     std::vector<float> column_money_modyfier;
-    int number_of_collumns;
+    int number_of_columns;
 
     int number_of_rows;
 
@@ -27,7 +28,7 @@ public:
     Params (const std::vector<float>& emm, const std::vector<float>& cmm, const int nor
           , const int lv, const int bc, const int fc)
                 : elem_money_modyfier(emm), number_of_elem(emm.size())
-                , column_money_modyfier(cmm), number_of_collumns(cmm.size() + 3), number_of_rows(nor)
+                , column_money_modyfier(cmm), number_of_columns(cmm.size() + 3), number_of_rows(nor)
                 , luck_value(lv), bonus_chance(bc), freespins_chance(fc) {}
 
     bool isBetween0and100(int num)
@@ -84,36 +85,35 @@ Params parseParamsFromJson(std::string str_params)
 }
 
 
-
 std::random_device dev;
 std::mt19937 rnd(dev());
 
 // TODO: figure out with luck, freespeens and bonus game
-extern "C" int spinSlot(int bet, std::string str_params)
+extern "C" RetStruct spinSlot(int bet, std::string str_params)
 {
+    std::cout << str_params << std::endl;
     Params params {parseParamsFromJson(str_params)};
 
     if (params.verify() == false)
     {
         std::cout << "Input parameter verification error!" << std::endl;
-        return 0;
+        RetStruct bad_ret;
+        return bad_ret;
     }
-
-    //std::vector<std::vector<int>> spin_result;
+    int zero_char = 65;
+    int* spin_result = new int[params.number_of_columns * params.number_of_rows]{0};
 
     std::uniform_int_distribution<int> dist(0, params.number_of_elem - 1);
-    int zero_char = 65;
     int money_earn = -bet;
     for (int i = 0; i < params.number_of_rows; ++i)
     {
-        std::vector<int> row;
         int match_count = 1;
         int elem_idx;
         bool skip = false;
-        for (int j = 0; j < params.number_of_collumns; ++j)
+        for (int j = 0; j < params.number_of_columns; ++j)
         {
             int cur_elem_idx = dist(rnd);
-            //row.push_back(cur_elem_idx);
+            spin_result[i * params.number_of_columns + j] = cur_elem_idx;
 
             std::cout << char(zero_char + cur_elem_idx) << ' ';
 
@@ -139,9 +139,9 @@ extern "C" int spinSlot(int bet, std::string str_params)
                 skip = true;
             }
         }
-        //spin_result.push_back(row);
         std::cout << '\n';
     }
     std::cout << std::endl;
-    return money_earn;
+    struct RetStruct ret(money_earn, spin_result);
+    return ret;
 }

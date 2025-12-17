@@ -1,5 +1,7 @@
 #include <iostream>
+#include <vector>
 #include <Windows.h>
+#include "ret_struct.hpp"
 #include "json.hpp" // from nlohman btw
 using json = nlohmann::json;
 
@@ -9,9 +11,11 @@ int main()
     json j;
 
     j["elem money modyfier"] = {1.5, 3, 5, 10};
-    j["column money modyfier"] = {2, 5};
-    
-    j["number of rows"] = 3;
+    std::vector<float> column_money_modyfier = {2, 5};
+    j["column money modyfier"] = column_money_modyfier;
+
+    int number_of_rows = 3;
+    j["number of rows"] = number_of_rows;
     j["luck value"] = 50;
     j["bonus chance"] = 2;
     j["freespins chance"] = 5;
@@ -21,7 +25,7 @@ int main()
     int bet = 100;
 
 // loading DLL part
-    typedef (*casino_func)(int bet, std::string str_params);
+    typedef RetStruct (*casino_func)(int bet, std::string str_params);
 
     const char* path = "./slots.dll";
 
@@ -46,10 +50,21 @@ int main()
     }
 
 // function test
+    int number_of_columns = column_money_modyfier.size() + 3;
     while (true)
     {
-        int win = function(100, str_params);
-        std::cout << "you won: " << win << '\n';
+        RetStruct win = function(100, str_params);
+        std::cout << "you won: " << win.win_ammount << '\n';
+
+        std::cout << "lines were:\n";
+        for (int i = 0; i < number_of_rows; ++i)
+        {
+            for (int j = 0; j < number_of_columns; ++j)
+            {
+                std::cout << win.spin_result[i * number_of_columns + j] << ' ';
+            }
+            std::cout << '\n';
+        }
         std::cin.get();
     }
 
