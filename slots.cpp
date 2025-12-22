@@ -66,7 +66,7 @@ public:
         return false;
     }
 
-    int getColumnModifier(int match_count)
+    float getColumnModifier(int match_count)
     {
         return match_count > 3 ? column_modyfier[match_count - 4] : 1;
     }
