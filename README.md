@@ -1,10 +1,20 @@
 # Slots
-## To build dll
+## To build program
 ```
-g++ main.cpp -o slot.dll -static -fPIC -shared
+make
 ```
 
-## To build test.exe
+## To build debug version
 ```
-g++ test.cpp -o test -static
+make debug
+```
+
+## To run program
+```
+make run
+```
+
+## To run is debug mode
+```
+make drun
 ```

@@ -10,9 +10,9 @@ int main()
 {
     json j;
 
-    j["elem money modyfier"] = {1.5, 3, 5, 10};
-    std::vector<float> column_money_modyfier = {2, 5};
-    j["column money modyfier"] = column_money_modyfier;
+    j["elem modyfier"] = {1.5, 3, 5, 10};
+    std::vector<float> column_modyfier = {2, 5};
+    j["column modyfier"] = column_modyfier;
 
     int number_of_rows = 3;
     j["number of rows"] = number_of_rows;
@@ -50,11 +50,13 @@ int main()
     }
 
 // function test
-    int number_of_columns = column_money_modyfier.size() + 3;
+    int number_of_columns = column_modyfier.size() + 3;
     while (true)
     {
-        RetStruct win = function(100, str_params);
+        RetStruct win = function(bet, str_params);
         std::cout << "you won: " << win.win_ammount << '\n';
+        std::cout << "number of freespins left: " << win.freespins_left << '\n';
+        std::cout << "bonus game: " << win.bonus_game << '\n';
 
         std::cout << "lines were:\n";
         for (int i = 0; i < number_of_rows; ++i)
@@ -66,6 +68,7 @@ int main()
             std::cout << '\n';
         }
         std::cin.get();
+        std::cout << std::endl;
     }
 
     return 0;
