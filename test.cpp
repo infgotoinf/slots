@@ -17,7 +17,7 @@ int main()
     int number_of_rows = 3;
     j["number of rows"] = number_of_rows;
     j["luck value"] = 50;
-    j["bonus chance"] = 2;
+    j["wild chance"] = 5;
     j["freespins chance"] = 5;
 
     std::string str_params = j.dump();
@@ -25,7 +25,7 @@ int main()
     int bet = 100;
 
 // loading DLL part
-    typedef RetStruct (*casino_func)(int bet, std::string str_params);
+    typedef RetStruct (*casino_func)(int bet, std::string str_params, int freespins_left);
 
     const char* path = "./slots.dll";
 
@@ -51,13 +51,15 @@ int main()
 
 // function test
     int number_of_columns = column_modyfier.size() + 3;
+    int freespins_left = 0;
     while (true)
     {
-        RetStruct win = function(bet, str_params);
+        RetStruct win = function(bet, str_params, freespins_left);
+        freespins_left = win.freespins_left;
         std::cout << "you won: " << win.win_ammount << '\n';
         std::cout << "number of freespins left: " << win.freespins_left << '\n';
-        std::cout << "bonus game: " << win.bonus_game << '\n';
 
+        /*
         std::cout << "lines were:\n";
         for (int i = 0; i < number_of_rows; ++i)
         {
@@ -67,9 +69,9 @@ int main()
             }
             std::cout << '\n';
         }
+        */
         std::cin.get();
-        std::cout << std::endl;
+        std::cout << '\n' << std::endl;
     }
-
     return 0;
 }

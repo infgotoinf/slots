@@ -6,6 +6,12 @@ using json = nlohmann::json;
 
 using namespace nlohmann::literals;
 
+enum class IDX 
+{
+    wild = -1,
+    freespins = -2
+};
+
 // Class what handles slot parameters
 class Params
 {
@@ -22,15 +28,15 @@ public:
     int number_of_rows;
 
     int luck_value;
-    int bonus_chance; // has element id of -1
-    int freespins_chance; // has element id of -2
+    int wild_chance;
+    int freespins_chance;
     
     // good thing for reference https://isocpp.github.io/CppCoreGuidelines/CppCoreGuidelines#rc-zero
     Params (const std::vector<float>& em, const std::vector<float>& cm, const int nor
-          , const int lv, const int bc, const int fc)
+          , const int lv, const int wc, const int fc)
                 : elem_modyfier(em), number_of_elem(em.size())
                 , column_modyfier(cm), number_of_columns(cm.size() + 3), number_of_rows(nor)
-                , luck_value(lv), bonus_chance(bc), freespins_chance(fc) {}
+                , luck_value(lv), wild_chance(wc), freespins_chance(fc) {}
 
     bool isBetween0and100(int num)
     {
@@ -41,9 +47,9 @@ public:
     bool verify()
     {
         if (isBetween0and100(luck_value)
-          & isBetween0and100(bonus_chance)
+          & isBetween0and100(wild_chance)
           & isBetween0and100(freespins_chance)
-          & isBetween0and100(bonus_chance + freespins_chance)
+          & isBetween0and100(wild_chance + freespins_chance)
           & (number_of_elem > 2)
           & (number_of_rows > 0))
         {
@@ -86,7 +92,7 @@ Params parseParamsFromJson(std::string str_params)
     Params params(parsed_params["elem modyfier"].get<std::vector<float>>()
                 , parsed_params["column modyfier"].get<std::vector<float>>()
                 , parsed_params["number of rows"].get<int>(), parsed_params["luck value"].get<int>()
-                , parsed_params["bonus chance"].get<int>(), parsed_params["freespins chance"].get<int>());
+                , parsed_params["wild chance"].get<int>(), parsed_params["freespins chance"].get<int>());
 
     return params;
 }
@@ -95,11 +101,31 @@ Params parseParamsFromJson(std::string str_params)
 std::random_device dev;
 std::mt19937 rnd(dev());
 
-// TODO: figure out with luck, freespins and bonus
-extern "C" RetStruct spinSlot(int bet, std::string str_params)
+extern "C" RetStruct spinSlot(int bet, std::string str_params, bool is_streamer, int freespins_left = 0)
 {
     std::cout << str_params << std::endl;
     Params params {parseParamsFromJson(str_params)};
+    bool good_luck = false;
+
+    if (is_streamer == true)
+    {
+        float streamer_multiplier = 1.2;
+        params.luck_value *= streamer_multiplier;
+        if (params.luck_value > 100)
+        {
+            params.luck_value = 100;
+        }
+    }
+    int luck_modyfier;
+    if (params.luck_value < 50)
+    {
+        luck_modyfier = 50 - params.luck_value;
+    }
+    else
+    {
+        luck_modyfier = params.luck_value - 50;
+        good_luck = true;
+    }
 
     if (params.verify() == false)
     {
@@ -113,24 +139,24 @@ extern "C" RetStruct spinSlot(int bet, std::string str_params)
     std::uniform_int_distribution<int> elem_dist(0, params.number_of_elem - 1);
     std::uniform_int_distribution<int> random_chance_dist(1, 100);
     int money_earn = -bet;
-    int freespins_left = 0;
-    bool bonus_game = false;
+    int freespins_count = 0;
     for (int i = 0; i < params.number_of_rows; ++i)
     {
         int match_count = 1;
-        int elem_idx;
+        int first_elem_idx;
         bool skip = false;
         for (int j = 0; j < params.number_of_columns; ++j)
         {
+        start:
             int random_chance = random_chance_dist(rnd);
             int cur_elem_idx;
-            if (random_chance < params.bonus_chance)
+            if (random_chance < params.wild_chance)
             {
-                cur_elem_idx = -1;
+                cur_elem_idx = static_cast<int>(IDX::wild);
             }
-            else if (random_chance < params.bonus_chance + params.freespins_chance)
+            else if (random_chance < params.wild_chance + params.freespins_chance)
             {
-                cur_elem_idx = -2;
+                cur_elem_idx = static_cast<int>(IDX::freespins);
             }
             else
             {
@@ -141,42 +167,90 @@ extern "C" RetStruct spinSlot(int bet, std::string str_params)
 
             std::cout << char(zero_char + cur_elem_idx) << ' ';
 
-            // Slot logic
+
+            if (cur_elem_idx == static_cast<int>(IDX::freespins))
+            {
+                freespins_count += 1;
+            }
+
             if (skip)
                 continue;
 
+            if (first_elem_idx == static_cast<int>(IDX::wild))
+            {
+                first_elem_idx = cur_elem_idx;
+            }
+
             if (j == 0)
             {
-                elem_idx = cur_elem_idx;
+                first_elem_idx = cur_elem_idx;
             }
-            else if (elem_idx == cur_elem_idx)
+            else if ((first_elem_idx == cur_elem_idx) | (cur_elem_idx == static_cast<int>(IDX::wild)))
             {
+                if (!good_luck)
+                {
+                    if (float(random_chance_dist(rnd)) / 2 <= luck_modyfier)
+                        goto start;
+                }
                 ++match_count;
             }
-            else if (match_count > 2)
+            else if ((match_count > 2) & (first_elem_idx != static_cast<int>(IDX::freespins)))
             {
-                if (cur_elem_idx == -1)
-                {
-                    bonus_game = true;
-                }
-                else if (cur_elem_idx == -2)
-                {
-                    freespins_left += params.getColumnModifier(match_count); 
-                }
-                else
-                {
-                    money_earn += countMoney(bet, params.elem_modyfier[elem_idx]
-                                           , params.getColumnModifier(match_count));
-                }
+                money_earn += countMoney(bet, params.elem_modyfier[first_elem_idx]
+                                       , params.getColumnModifier(match_count));
             }
             else
             {
+                if (good_luck)
+                {
+                    if (float(random_chance_dist(rnd)) / 2 <= luck_modyfier)
+                        goto start;
+                }
                 skip = true;
+            }
+        }
+        // hangling full row of same symbols
+        if (match_count == params.number_of_columns)
+        {
+            switch (first_elem_idx)
+            {
+                case static_cast<int>(IDX::freespins):
+                    continue;
+                case static_cast<int>(IDX::wild):
+                    for (int i2 = 1; i2 < params.number_of_columns; ++i2)
+                    {
+                        money_earn += countMoney(bet, params.elem_modyfier[first_elem_idx]
+                                               , params.getColumnModifier(i2));
+                    }
+                    break;
+                default:
+                    money_earn += countMoney(bet, params.elem_modyfier[first_elem_idx]
+                                           , params.getColumnModifier(match_count));
             }
         }
         std::cout << '\n';
     }
     std::cout << std::endl;
-    struct RetStruct ret(money_earn, spin_result, freespins_left, bonus_game);
+    if (freespins_left > 0)
+    {
+        freespins_left--;
+        money_earn += bet;
+    }
+    if (freespins_count > 2)
+    {
+        int base_number_of_free_spins = 5;
+
+        // handling freespin count more than number of columns (yes, i did this pretty ugly)
+        for (int i = (freespins_count > params.number_of_columns ? params.number_of_columns
+                                                                 : freespins_count)
+               ; freespins_count > 0
+               ; i = (freespins_count > params.number_of_columns ? params.number_of_columns
+                                                                 : freespins_count)
+               , freespins_count -= i)
+        {
+            freespins_left += params.getColumnModifier(i) * base_number_of_free_spins;
+        }
+    }
+    struct RetStruct ret(money_earn, spin_result, freespins_left);
     return ret;
 }
